@@ -1,0 +1,136 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Clinic Booking</title>
+    <style>
+        body {
+            font-family: system-ui, sans-serif;
+            max-width: 600px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        .slot {
+            border: 1px solid #ccc;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-radius: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+            .slot button {
+                background: #007bff;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                cursor: pointer;
+            }
+
+                .slot button:disabled {
+                    background: #ccc;
+                    cursor: not-allowed;
+                }
+
+        .error {
+            color: red;
+            margin-top: 10px;
+        }
+
+        .success {
+            color: green;
+            margin-top: 10px;
+            padding: 15px;
+            background: #e6ffe6;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body>
+    <h2>Clinic Slots</h2>
+    <div id="slots-container">Loading slots...</div>
+    <div id="message-box"></div>
+
+    <script>
+        // If testing locally, use "https://localhost:7207". If deployed, use the Render URL.
+        const API_BASE = window.location.origin;
+        const API_KEY = "koya-test-key";
+
+        async function loadSlots() {
+            const container = document.getElementById('slots-container');
+            container.innerHTML = 'Loading...';
+
+            try {
+                const response = await fetch(`${API_BASE}/slots`, {
+                    headers: { 'X-API-Key': API_KEY }
+                });
+
+                if (!response.ok) throw new Error("Failed to load slots");
+
+                const data = await response.json();
+                container.innerHTML = '';
+
+                if (!data.slots || data.slots.length === 0) {
+                    container.innerHTML = '<p>No slots available. Did you run /reset?</p>';
+                    return;
+                }
+
+                data.slots.forEach(slot => {
+                    const div = document.createElement('div');
+                    div.className = 'slot';
+                    const time = new Date(slot.start).toLocaleString();
+
+                    div.innerHTML = `
+                        <div>
+                            <strong>${slot.provider}</strong><br>
+                            ${time}
+                        </div>
+                        <button onclick="bookSlot('${slot.id}')" ${slot.available ? '' : 'disabled'}>
+                            ${slot.available ? 'Book' : 'Booked'}
+                        </button>
+                    `;
+                    container.appendChild(div);
+                });
+            } catch (err) {
+                container.innerHTML = `<div class="error">${err.message}</div>`;
+            }
+        }
+
+        async function bookSlot(slotId) {
+            const name = prompt("Enter your name:");
+            if (!name) return;
+            const email = prompt("Enter your email:");
+            if (!email) return;
+
+            const msgBox = document.getElementById('message-box');
+            msgBox.innerHTML = '';
+
+            try {
+                const response = await fetch(`${API_BASE}/bookings`, {
+                    method: 'POST',
+                    headers: {
+                        'X-API-Key': API_KEY,
+                        'Content-Type': 'application/json',
+                        'Idempotency-Key': crypto.randomUUID()
+                    },
+                    body: JSON.stringify({ slot_id: slotId, name: name, email: email })
+                });
+
+                const data = await response.json();
+                if (!response.ok) throw new Error(data.error || "Booking failed");
+
+                msgBox.innerHTML = `<div class="success">Successfully booked! Booking ID: ${data.id}</div>`;
+                loadSlots();
+            } catch (err) {
+                msgBox.innerHTML = `<div class="error">${err.message}</div>`;
+            }
+        }
+
+        loadSlots();
+    </script>
+</body>
+</html>
